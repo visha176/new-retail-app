@@ -25,7 +25,7 @@ colorama==0.4.6
 comm==0.2.2
 comtypes==1.4.6
 contourpy==1.2.1
-cryptography==43.0.0
+
 cvzone==1.6.1
 cycler==0.12.1
 debugpy==1.8.5
