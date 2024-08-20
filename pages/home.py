@@ -163,7 +163,7 @@ background-color: #5c5c6052;
         st.write("Centric scalable, easy to use, AI-driven, best-of-breed solutions enable teams to plan, execute and price consumer-centric assortments that also meet sustainability and compliance goals.Collaboration is easy and innovation, possible. Leaving you to focus on what you do best: bringing the products to market that your customers want")
         
     with col13:
-        st.image("C:/Users/visha.iqbal/Desktop/new UI/pl.png", use_column_width=True)
+        st.image('pl.png', use_column_width=True)
 
 
    
