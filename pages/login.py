@@ -67,6 +67,10 @@ def show_login():
                 background-color: rgb(31 55 154);
     border: 1px solid rgba(49, 51, 63, 0.2);
 }
+.st-emotion-cache-187vdiz p {
+    word-break: break-word;
+    margin-bottom: 0px;
+    }
                 
         </style>
     """, unsafe_allow_html=True)
