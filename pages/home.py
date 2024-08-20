@@ -71,7 +71,7 @@ background-color: #5c5c6052;
 
     # Content in the second column (middle)
     with col2:
-        st.image("C:/Users/visha.iqbal/Desktop/new UI/kl.png", use_column_width=True)
+        st.image('kl.png', use_column_width=True)
         
 
     # Adding larger gap between columns
