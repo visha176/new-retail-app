@@ -10,6 +10,7 @@ def login_page():
     remember_me = st.checkbox("Remember me")
     
     if st.button("Login"):
+        
         if USER_CREDENTIALS.get(username) == password:
             st.session_state['logged_in'] = True
             st.rerun()  # Rerun to switch to the main content page
