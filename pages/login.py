@@ -61,6 +61,7 @@ def show_login():
     margin-bottom: auto;
     font-size: 19px;
     font-family: 'Source Sans Pro';
+    color: 'white';
 }
                 .st-emotion-cache-1vt4y43 {
                 background-color: rgb(31 55 154);
