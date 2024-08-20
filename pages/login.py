@@ -25,7 +25,7 @@ def show_login():
     st.markdown("""
         <style>
                 .stApp {
-            background-image: url("https://img.freepik.com/free-vector/geometric-gradient-futuristic-background_23-2149116406.jpg?t=st=1723646938~exp=1723650538~hmac=e0f0a12b66db401ec6a336cc207a282f9641e218d274591c71dba1910c5c6769&w=996");
+            background-image: url("https://images.unsplash.com/photo-1526666923127-b2970f64b422?q=80&w=2072&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
             background-size: cover;
             color:white;
         }
