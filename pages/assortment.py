@@ -109,6 +109,15 @@ def show_assortment():
     background-color: rgb(70 87 169);
     border: 1px solid rgba(49, 51, 63, 0.2);
 }
+                h3 {
+    font-family: "Source Sans Pro", sans-serif;
+    font-weight: 600;
+    color: rgb(255 255 255);
+    letter-spacing: -0.005em;
+    padding: 0.5rem 0px 1rem;
+    margin: 0px;
+    line-height: 1.2;
+}
                 }
 
         
