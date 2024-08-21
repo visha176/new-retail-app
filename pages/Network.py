@@ -218,7 +218,7 @@ def show_Network():
     min-height: 2.5rem;
     margin: 0px;
     line-height: 1.6;
-    color: inherit;
+    color: white;
     width: auto;
     user-select: none;
     background-color: rgb(70 87 169);
@@ -227,6 +227,20 @@ def show_Network():
                 .st-emotion-cache-144mis {
   
     display: none;
+}
+                h1 {
+    font-family: "Source Sans Pro", sans-serif;
+    font-weight: 700;
+    color: rgb(244 245 253);
+    padding: 1.25rem 0px 1rem;
+    margin: 0px;
+    line-height: 1.2;
+}
+                .st-emotion-cache-1whx7iy p {
+    /* word-break: break-word; */
+    margin-bottom: 0px;
+    font-size: 14px;
+    color: white;
 }
                 }
 
