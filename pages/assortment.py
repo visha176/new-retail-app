@@ -12,10 +12,10 @@ def create_sample_file(file_type):
             'Disp. Qty': [10, 20],
             'Sold Qty': [50, 150],
             'DESIGN': ['Design1', 'Design2'],
-            'Color':['Red','Blue'],
-            'Size':['Small','Medium'],
-            'Class':['Casual','Fancy'],
-            'SubClass':['Lawn','Chiffon']
+            'Color': ['Red', 'Blue'],
+            'Size': ['Small', 'Medium'],
+            'Class': ['Casual', 'Fancy'],
+            'SubClass': ['Lawn', 'Chiffon']
         }
     elif file_type == "warehouse":
         sample_data = {
@@ -28,7 +28,7 @@ def create_sample_file(file_type):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         sample_df.to_excel(writer, index=False, sheet_name='Sample Data')
-        writer.close()  # Close the writer
+        writer.close()
     output.seek(0)
 
     return output
@@ -58,6 +58,9 @@ def process_data(file1, file2, threshold):
 
     pivot_table['Transfer Qty'] = 0
 
+    return df, pivot_table, new_df
+
+def transfer_details(pivot_table, new_df):
     high_priority_stores = pivot_table[pivot_table['Status'] == 'High'].copy()
     high_priority_stores.sort_values(['Sell Through Rate (%)', 'UPC Sell Through Rate (%)'], ascending=[False, False], inplace=True)
 
@@ -103,7 +106,7 @@ def show_assortment():
     min-height: 2.5rem;
     margin: 0px;
     line-height: 1.6;
-    color: inherit;
+    color: white;
     width: auto;
     user-select: none;
     background-color: rgb(70 87 169);
@@ -117,6 +120,20 @@ def show_assortment():
     padding: 0.5rem 0px 1rem;
     margin: 0px;
     line-height: 1.2;
+}
+                h1 {
+    font-family: "Source Sans Pro", sans-serif;
+    font-weight: 700;
+    color: rgb(252 252 255);
+    padding: 1.25rem 0px 1rem;
+    margin: 0px;
+    line-height: 1.2;
+}
+                .st-emotion-cache-1whx7iy p {
+    word-break: break-word;
+    margin-bottom: 0px;
+    font-size: 14px;
+    color: white;
 }
                 }
 
@@ -139,12 +156,23 @@ def show_assortment():
     file2 = st.file_uploader("Upload the warehouse Excel file", type=["xlsx"])
     threshold = st.number_input("Set Sell-Through Threshold (%)", min_value=0, max_value=100, value=50, step=1)
     
-    if file1 is not None and file2 is not None and st.button("Process Data"):
-        result = process_data(file1, file2, threshold)
-        st.success("Data processed successfully!")
-        st.dataframe(result)
-        st.download_button(label="Download Result", data=result.to_csv(index=False), file_name='result.csv', mime='text/csv')
-    elif st.button("Process Data"):
+    if file1 is not None and file2 is not None:
+        if st.button("Process Data"):
+            processed_df, pivot_table, new_df = process_data(file1, file2, threshold)
+            transfer_df = transfer_details(pivot_table, new_df)
+            
+            st.success("Data processed successfully!")
+            
+            # Show processed data before transfer
+            st.subheader("Processed Data (Before Transfer)")
+            st.dataframe(processed_df)
+            st.download_button(label="Download Processed Data", data=processed_df.to_csv(index=False), file_name='processed_data.csv', mime='text/csv')
+            
+            # Show transfer details
+            st.subheader("Transfer Details")
+            st.dataframe(transfer_df)
+            st.download_button(label="Download Transfer Details", data=transfer_df.to_csv(index=False), file_name='transfer_details.csv', mime='text/csv')
+    else:
         st.error("Please upload both files to proceed.")
 
 if __name__ == "__main__":
