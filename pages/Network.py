@@ -28,25 +28,18 @@ def create_sample_file():
         sample_df.to_excel(writer, index=False, sheet_name='Sample Data')
     processed_data = output.getvalue()
     return processed_data
-
 def load_data(file):
     return pd.read_excel(file)
 
 def adjust_date(df, threshold_date):
-    threshold_timestamp = pd.Timestamp(threshold_date)
-    
-    # 1. Explicitly create a copy of the DataFrame to avoid SettingWithCopyWarning
-    df = df.copy()
-
-    df['1st Rcv Date'] = pd.to_datetime(df['1st Rcv Date'], errors='coerce')
-    df = df.dropna(subset=['1st Rcv Date'])  # Remove rows where date conversion failed
-    
-    # 2. Use .loc to ensure you're modifying the DataFrame in place
-    df.loc[:, 'Adjusted 1st Rcv Date'] = np.where(df['1st Rcv Date'] <= threshold_timestamp, 
-                                                  threshold_timestamp, 
-                                                  df['1st Rcv Date'])
-    df.loc[:, 'Adjusted 1st Rcv Date'] = pd.to_datetime(df['Adjusted 1st Rcv Date'], errors='coerce')
-    
+    def adjust_single_date(date):
+        threshold_timestamp = pd.Timestamp(threshold_date)
+        if date <= threshold_timestamp:
+            return threshold_timestamp
+        else:
+            return date
+    df['1st Rcv Date'] = pd.to_datetime(df['1st Rcv Date'])
+    df['Adjusted 1st Rcv Date'] = df['1st Rcv Date'].apply(adjust_single_date)
     return df
 
 def aggregate_data(df, threshold_date):
@@ -66,129 +59,113 @@ def calculate_sell_through(desired_df):
 
 def calculate_days(df):
     current_date = datetime.now()
-    df['Days'] = (current_date - df['Adjusted 1st Rcv Date']).dt.days
+    df['Shop Days'] = (current_date - df['Adjusted 1st Rcv Date']).dt.days
     return df
 
-def calculate_design_sell_through(df):
+def calculate_design_sell_through(df):#replace desin with upc
     df['Net Receiving'] = df['Shop Rcv Qty'] - df['Disp. Qty']
-    design_totals = df.groupby('DESIGN').agg({'Sold Qty': 'sum', 'Net Receiving': 'sum'}).reset_index()
+    design_totals = df.groupby('UPC/Barcode/SKU').agg({'Sold Qty': 'sum', 'Net Receiving': 'sum'}).reset_index()
     design_totals['design Sell Through'] = (design_totals['Sold Qty'] / design_totals['Net Receiving'] * 100)
     design_totals['design Sell Through'] = design_totals['design Sell Through'].replace([np.inf, -np.inf, np.nan], 0).astype(int)
     return design_totals
 
 def merge_data(desired_df, design_totals):
-    return pd.merge(desired_df, design_totals[['DESIGN', 'design Sell Through']], on='DESIGN', how='left')
+    return pd.merge(desired_df, design_totals[['UPC/Barcode/SKU', 'design Sell Through']], on='UPC/Barcode/SKU', how='left')
 
 def apply_status_condition(desired_df):
     desired_df['Status'] = 'Low'
-    desired_df.loc[desired_df['shop Sell Through'] > desired_df['design Sell Through'], 'Status'] = 'High'
+    desired_df.loc[desired_df['shop Sell Through'] >= desired_df['design Sell Through'], 'Status'] = 'High'
     return desired_df
 
-def process_data(desired_df):
-    article_days = desired_df.groupby('DESIGN')['Days'].max().reset_index()
-    merged_df = pd.merge(desired_df, article_days, on='DESIGN', how='left', suffixes=('', '_max_days'))
-    merged_df_grouped = merged_df.groupby('DESIGN').agg({
+def process_data(desired_df):#replacw with upc
+    article_days = desired_df.groupby('UPC/Barcode/SKU')['Shop Days'].max().reset_index()
+    merged_df = pd.merge(desired_df, article_days, on='UPC/Barcode/SKU', how='left', suffixes=('', '_max_days'))
+    merged_df_grouped = merged_df.groupby('UPC/Barcode/SKU').agg({
         'O.H Qty': 'sum',
         'Sold Qty': 'sum',
-        'Days': 'max'
+        'Shop Days': 'max'
     }).reset_index()
-    result_df = merged_df_grouped[['DESIGN', 'Days']].rename(columns={'Days': 'Date Difference'})
+    result_df = merged_df_grouped[['UPC/Barcode/SKU', 'Shop Days']].rename(columns={'Shop Days': 'Date Difference'})
     return result_df
 
-def process_and_calculate_cover(df, article_days):
-    merged_df = pd.merge(df, article_days, on='DESIGN', how='left', suffixes=('', '_max_days'))
-    merged_df_grouped = merged_df.groupby('DESIGN').agg({
+def process_and_calculate_cover(df, article_days):#replace design with upc 
+    merged_df = pd.merge(df, article_days, on='UPC/Barcode/SKU', how='left', suffixes=('', '_max_days'))
+    merged_df_grouped = merged_df.groupby('UPC/Barcode/SKU').agg({
         'O.H Qty': 'sum',
         'Sold Qty': 'sum',
-        'Days': 'max'
+        'Shop Days': 'max'
     }).reset_index()
-    result_df = merged_df_grouped[['DESIGN', 'Days']].rename(columns={'Days': 'Date Difference'})
-    merged_df_grouped = pd.merge(merged_df_grouped, result_df, on='DESIGN', how='left')
-    merged_df_grouped['desired_cover'] = merged_df_grouped['O.H Qty'] / (merged_df_grouped['Sold Qty'] / merged_df_grouped['Date Difference'])
+    result_df = merged_df_grouped[['UPC/Barcode/SKU', 'Shop Days']].rename(columns={'Shop Days': 'Date Difference'})
+    merged_df_grouped = pd.merge(merged_df_grouped, result_df, on='UPC/Barcode/SKU', how='left')
+    merged_df_grouped['Targeted Cover'] = merged_df_grouped['O.H Qty'] / (merged_df_grouped['Sold Qty'] / merged_df_grouped['Date Difference'])
     return merged_df_grouped
 
 def merge_with_desired_cover(desired_df, merged_df_grouped):
-    desired_df = pd.merge(desired_df, merged_df_grouped[['DESIGN', 'desired_cover']], on='DESIGN', how='left')
-    desired_df['desired_cover'] = desired_df['desired_cover'].fillna(0).replace([np.inf, -np.inf], 0).astype(int)
+    desired_df = pd.merge(desired_df, merged_df_grouped[['UPC/Barcode/SKU', 'Targeted Cover']], on='UPC/Barcode/SKU', how='left')
+    desired_df['Targeted Cover'] = desired_df['Targeted Cover'].fillna(0).replace([np.inf, -np.inf], 0).astype(int)
     return desired_df
 
-def calculate_article_days(df):
+def calculate_article_days(df):# design change on request
     df['Adjusted 1st Rcv Date'] = pd.to_datetime(df['Adjusted 1st Rcv Date'], errors='coerce')
     df = df.dropna(subset=['Adjusted 1st Rcv Date'])
     today = pd.Timestamp.now().normalize()
-    df['Design_Days'] = (today - df['Adjusted 1st Rcv Date']).dt.days
-    article_days = df.groupby('DESIGN')['Design_Days'].max().reset_index()
+    df['Max Design Days'] = (today - df['Adjusted 1st Rcv Date']).dt.days
+    article_days = df.groupby('UPC/Barcode/SKU')['Max Design Days'].max().reset_index()
     return article_days
 
-def calculate_required_cover(desired_df):
-    desired_df['Transfer in/out'] = desired_df['desired_cover'] * (desired_df['Sold Qty'] / desired_df['Days']) - desired_df['O.H Qty']
+
+def calculate_required_cover(desired_df): # desired cover * sold qty / days = required on hand when we minus current o.h= transfer in/out
+    desired_df['Transfer in/out'] = desired_df['Targeted Cover'] * (desired_df['Sold Qty'] / desired_df['Shop Days']) - desired_df['O.H Qty']
     desired_df['Transfer in/out'] = desired_df['Transfer in/out'].replace([np.inf, -np.inf, np.nan], 0).astype(int)
     return desired_df
 
 def merge_desired_with_article_days(desired_df, article_days):
-    desired_df = pd.merge(desired_df, article_days, on='DESIGN', how='left')
+    desired_df = pd.merge(desired_df, article_days, on='UPC/Barcode/SKU', how='left')
     return desired_df
 
 def filter_data(desired_df, sell_through_threshold, days_threshold):
-    filtered_df = desired_df[(desired_df['design Sell Through'] > sell_through_threshold) & (desired_df['Design_Days'] > days_threshold)]
+    filtered_df = desired_df[(desired_df['design Sell Through'] > sell_through_threshold) & (desired_df['Max Design Days'] > days_threshold)]
     return filtered_df
 
 def process_transfer_details(filtered_df):
+    sending_stores = filtered_df[filtered_df['Transfer in/out'] < 0]
+    receiving_stores = filtered_df[filtered_df['Transfer in/out'] > 0]
     transfer_details = []
 
-    # Sending stores: Transfer out (negative values)
-    sending_stores = filtered_df[filtered_df['Transfer in/out'] < 0]
-    # Receiving stores: Transfer in (positive values)
-    receiving_stores = filtered_df[filtered_df['Transfer in/out'] > 0]
-
-    # Iterate over sending stores
     for sending_index, sending_row in sending_stores.iterrows():
-        excess_quantity = abs(sending_row['Transfer in/out'])
-        upc = sending_row['UPC/Barcode/SKU']
-        from_store = sending_row['STORE_NAME']
-        design = sending_row['DESIGN']
-        
-        # Find matching receiving stores based on UPC, DESIGN, and excluding the same store
         matches = receiving_stores[
-            (receiving_stores['UPC/Barcode/SKU'] == upc) &
-            (receiving_stores['DESIGN'] == design) &
-            (receiving_stores['STORE_NAME'] != from_store) &
+            (receiving_stores['UPC/Barcode/SKU'] == sending_row['UPC/Barcode/SKU']) &
+            (receiving_stores['STORE_NAME'] != sending_row['STORE_NAME']) &
             (receiving_stores['Transfer in/out'] > 0)
         ]
 
-        for receiving_index, receiving_row in matches.iterrows():
-            if excess_quantity <= 0:
-                break
+        if matches.empty:
+            continue
 
-            # Calculate the amount to transfer
-            transfer_qty = min(excess_quantity, receiving_row['Transfer in/out'])
-            
-            # Record the transfer details
+        total_qty_to_transfer = abs(sending_row['Transfer in/out'])
+
+        for receiving_index, receiving_row in matches.iterrows():
+            transfer_qty = min(total_qty_to_transfer, receiving_row['Transfer in/out'])
+            sending_stores.at[sending_index, 'Transfer in/out'] += transfer_qty
+            receiving_stores.at[receiving_index, 'Transfer in/out'] -= transfer_qty
             transfer_details.append({
-                'UPC/Barcode/SKU': upc,
-                'From Store': from_store,
+                'UPC/Barcode/SKU': sending_row['UPC/Barcode/SKU'],
+                'From Store': sending_row['STORE_NAME'],
                 'To Store': receiving_row['STORE_NAME'],
-                'DESIGN': design,
+                'DESIGN': sending_row['DESIGN'],
                 'Size': sending_row['Size'],
                 'Color': sending_row['Color'],
                 'Class': sending_row['Class'],
                 'SubClass': sending_row['SubClass'],
+                'Size': sending_row['Size'],
                 'Quantity Transferred': transfer_qty
             })
+            total_qty_to_transfer -= transfer_qty
+            if total_qty_to_transfer <= 0:
+                break
 
-            # Update the quantities
-            excess_quantity -= transfer_qty
-            receiving_stores.at[receiving_index, 'Transfer in/out'] -= transfer_qty
-            sending_stores.at[sending_index, 'Transfer in/out'] += transfer_qty
-
-        # Update filtered_df after processing all receiving stores for the current sending store
-        filtered_df.update(sending_stores)
-        filtered_df.update(receiving_stores)
-
-    # Convert transfer details into a DataFrame
     transfer_df = pd.DataFrame(transfer_details)
     return transfer_df
-
 
 
 def to_excel(df):
