@@ -1,90 +1,115 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import io
+from datetime import datetime
+import tempfile
 
-def create_sample_file(file_type):
-    if file_type == "shop":
-        sample_data = {
-            'STORE_NAME': ['Store1', 'Store2'],
-            'UPC': ['1234567890', '0987654321'],
-            'Shop Rcv Qty': [100, 200],
-            'Disp. Qty': [10, 20],
-            'Sold Qty': [50, 150],
-            'DESIGN': ['Design1', 'Design2'],
-            'Color': ['Red', 'Blue'],
-            'Size': ['Small', 'Medium'],
-            'Class': ['Casual', 'Fancy'],
-            'SubClass': ['Lawn', 'Chiffon']
-        }
-    elif file_type == "warehouse":
-        sample_data = {
-            'UPC': ['1234567890', '0987654321'],
-            'QTY': [300, 400]
-        }
+# Define functions (same as before)
 
-    sample_df = pd.DataFrame(sample_data)
-    
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        sample_df.to_excel(writer, index=False, sheet_name='Sample Data')
-        writer.close()
-    output.seek(0)
+def adjust_date(df, threshold_date):
+    def adjust_single_date(date):
+        threshold_timestamp = pd.Timestamp(threshold_date)
+        if date <= threshold_timestamp:
+            return threshold_timestamp
+        else:
+            return date
 
-    return output
+    df['1st Rcv Date'] = pd.to_datetime(df['1st Rcv Date'])
+    df['Adjusted 1st Rcv Date'] = df['1st Rcv Date'].apply(adjust_single_date)
+    return df
 
-def process_data(file1, file2, threshold):
-    df = pd.read_excel(file1)
-    new_df = pd.read_excel(file2)
+def calculate_sell_through(df):
+    sell_through = (df['Sold Qty'] / (df['O.H QTY'] + df['Sold Qty']) * 100)
+    sell_through = sell_through.replace([np.inf, -np.inf, np.nan], 0)
+    df['shop Sell Through'] = sell_through.astype(int)
+    return df
 
-    df['Shop Rcv Qty'] = pd.to_numeric(df['Shop Rcv Qty'], errors='coerce')
-    df['Disp. Qty'] = pd.to_numeric(df['Disp. Qty'], errors='coerce')
-    df['Net Rcv'] = df['Shop Rcv Qty'] - df['Disp. Qty']
-    df['Sold Qty'] = pd.to_numeric(df['Sold Qty'], errors='coerce')
+def calculate_days(df):
+    current_date = datetime.now()
+    df['Shop Days'] = (current_date - df['Adjusted 1st Rcv Date']).dt.days
+    return df
 
-    df['Sell Through Rate (%)'] = ((df['Sold Qty'] / df['Net Rcv']) * 100).round(0)
-    df['Sell Through Rate (%)'].replace([float('inf'), float('-inf'), np.nan], 0, inplace=True)
+def calculate_design_sell_through(df):
+    df['Net Receiving'] = df['O.H QTY'] + df['Sold Qty']
+    design_totals = df.groupby('UPC/SKU/Barcode').agg({
+        'Sold Qty': 'sum',
+        'Net Receiving': 'sum'
+    }).reset_index()
+    design_totals['design Sell Through'] = (design_totals['Sold Qty'] / design_totals['Net Receiving'] * 100)
+    design_totals['design Sell Through'] = design_totals['design Sell Through'].replace([np.inf, -np.inf, np.nan], 0).astype(int)
+    return design_totals
 
-    df['UPC Sell Through Rate (%)'] = df.groupby('UPC')['Sold Qty'].transform('sum') / df.groupby('UPC')['Net Rcv'].transform('sum') * 100
-    df['UPC Sell Through Rate (%)'].replace([float('inf'), float('-inf'), np.nan], 0, inplace=True)
-    df['UPC Sell Through Rate (%)'] = df['UPC Sell Through Rate (%)'].round(0)
+def apply_status_condition(df):
+    df['Status'] = 'Low'
+    df.loc[df['shop Sell Through'] >= df['design Sell Through'], 'Status'] = 'High'
+    return df
 
-    df['Status'] = np.where(df['Sell Through Rate (%)'] > threshold, 'High', 'Low')
+def calculate_article_days(df):
+    df = df.copy()  # Create a copy of the DataFrame to avoid SettingWithCopyWarning
+    df['Adjusted 1st Rcv Date'] = pd.to_datetime(df['Adjusted 1st Rcv Date'], errors='coerce')
+    df = df.dropna(subset=['Adjusted 1st Rcv Date'])
+    today = pd.Timestamp.now().normalize()
+    df['Max Design Days'] = (today - df['Adjusted 1st Rcv Date']).dt.days
+    article_days = df.groupby('UPC/SKU/Barcode')['Max Design Days'].max().reset_index()
+    return article_days
 
-    pivot_table = df.pivot_table(values=['Net Rcv', 'Sold Qty', 'Sell Through Rate (%)', 'UPC Sell Through Rate (%)', 'Status'], 
-                                 index=['STORE_NAME', 'UPC'], 
-                                 aggfunc={'Net Rcv': 'sum', 'Sold Qty': 'sum', 'Sell Through Rate (%)': 'first', 
-                                          'UPC Sell Through Rate (%)': 'first', 'Status': 'first'})
+def process_and_calculate_cover(df, article_days):
+    merged_df = pd.merge(df, article_days, on='UPC/SKU/Barcode', how='left', suffixes=('', '_max_days'))
+    merged_df_grouped = merged_df.groupby('UPC/SKU/Barcode').agg({
+        'O.H QTY': 'sum',
+        'Sold Qty': 'sum',
+        'Shop Days': 'max'
+    }).reset_index()
+    merged_df_grouped['Targeted Cover'] = merged_df_grouped['O.H QTY'] / (merged_df_grouped['Sold Qty'] / merged_df_grouped['Shop Days'])
+    return merged_df_grouped[['UPC/SKU/Barcode', 'Targeted Cover']]
 
-    pivot_table['Transfer Qty'] = 0
+def calculate_required_cover(df):
+    df['Sold Qty'] = df['Sold Qty'].fillna(0)
+    df['Transfer in/out'] = df['Targeted Cover'] * (df['Sold Qty'] / df['Shop Days']) - df['O.H QTY']
+    df['Transfer in/out'] = df['Transfer in/out'].fillna(0)
+    return df
 
-    return df, pivot_table, new_df
+def create_transfer_records(df):
+    warehouse_df = df[df['STORE_NAME'] == 'Warehouse'].copy()
+    store_df = df[(df['STORE_NAME'] != 'Warehouse') & (df['Transfer in/out'] > 0)].copy()
+    transfer_records = []
 
-def transfer_details(pivot_table, new_df):
-    high_priority_stores = pivot_table[pivot_table['Status'] == 'High'].copy()
-    high_priority_stores.sort_values(['Sell Through Rate (%)', 'UPC Sell Through Rate (%)'], ascending=[False, False], inplace=True)
-
-    for index, row in new_df.iterrows():
-        upc = row['UPC']
-        qty_to_distribute = row['QTY']
-
-        eligible_stores = high_priority_stores.loc[high_priority_stores.index.get_level_values('UPC') == upc]
-
-        for store_index, store_row in eligible_stores.iterrows():
-            if qty_to_distribute <= 0:
+    for warehouse_index, warehouse_row in warehouse_df.iterrows():
+        excess_stock = warehouse_row['O.H QTY']
+        
+        if store_df.empty or excess_stock <= 0:
+            continue
+        
+        relevant_store_df = store_df[store_df['UPC/SKU/Barcode'] == warehouse_row['UPC/SKU/Barcode']]
+        
+        for store_index, store_row in relevant_store_df.iterrows():
+            if excess_stock <= 0:
                 break
+            
+            store_need = store_row['Transfer in/out']
+            store_sold_qty = store_row['Sold Qty']
+            
+            max_transfer_qty = min(store_need, store_sold_qty, excess_stock)
+            
+            if max_transfer_qty > 0:
+                transfer_records.append({
+                    'UPC/SKU/Barcode': warehouse_row['UPC/SKU/Barcode'],
+                    'Sending Store': warehouse_row['STORE_NAME'],
+                    'Receiving Store': store_row['STORE_NAME'],
+                    'Transfer Qty': max_transfer_qty
+                })
+                
+                excess_stock -= max_transfer_qty
+                store_df.loc[store_index, 'Transfer in/out'] -= max_transfer_qty
 
-            if store_row['Sold Qty'] < 0:
-                additional_transfer = 0
-            else:
-                max_transferable = min(store_row['Sold Qty'], qty_to_distribute)
-                current_transfer = pivot_table.loc[store_index, 'Transfer Qty']
-                additional_transfer = min(max_transferable, store_row['Sold Qty'] - current_transfer)
+                if store_df.loc[store_index, 'Transfer in/out'] <= 0:
+                    store_df = store_df.drop(store_index)
 
-            pivot_table.loc[store_index, 'Transfer Qty'] += additional_transfer
-            qty_to_distribute -= additional_transfer
-
-    return pivot_table.reset_index()
+        warehouse_df.loc[warehouse_index, 'O.H QTY'] = excess_stock
+    
+    transfer_df = pd.DataFrame(transfer_records)
+    
+    return transfer_df
 
 def show_assortment():
     st.markdown("""
@@ -142,38 +167,76 @@ def show_assortment():
         </style>
     """, unsafe_allow_html=True)
     st.title('Assortment✍')
-    
-    # Provide the sample files for download
-    shop_sample_file = create_sample_file("shop")
-    warehouse_sample_file = create_sample_file("warehouse")
-    
-    st.download_button(label="Download Shop Sample File", data=shop_sample_file, file_name='shop_sample_data.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    st.download_button(label="Download Warehouse Sample File", data=warehouse_sample_file, file_name='warehouse_sample_data.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    
-    # File upload and processing section
-    st.markdown("### Upload Files for Processing")
-    file1 = st.file_uploader("Upload the shop Excel file", type=["xlsx"])
-    file2 = st.file_uploader("Upload the warehouse Excel file", type=["xlsx"])
-    threshold = st.number_input("Set Sell-Through Threshold (%)", min_value=0, max_value=100, value=50, step=1)
-    
-    if file1 is not None and file2 is not None:
-        if st.button("Process Data"):
-            processed_df, pivot_table, new_df = process_data(file1, file2, threshold)
-            transfer_df = transfer_details(pivot_table, new_df)
-            
-            st.success("Data processed successfully!")
-            
-            # Show processed data before transfer
-            st.subheader("Processed Data (Before Transfer)")
-            st.dataframe(processed_df)
-            st.download_button(label="Download Processed Data", data=processed_df.to_csv(index=False), file_name='processed_data.csv', mime='text/csv')
-            
-            # Show transfer details
-            st.subheader("Transfer Details")
-            st.dataframe(transfer_df)
-            st.download_button(label="Download Transfer Details", data=transfer_df.to_csv(index=False), file_name='transfer_details.csv', mime='text/csv')
-    else:
-        st.error("Please upload both files to proceed.")
+
+    uploaded_warehouse_file = st.file_uploader("Upload Warehouse File", type=["xlsx"])
+    uploaded_shop_file = st.file_uploader("Upload Shop File", type=["xlsx"])
+
+    threshold_date = st.date_input("Season Launch Date", value=datetime(2024, 2, 17))
+    sell_through_threshold = st.number_input("Enter Sell-Through Threshold (%)", min_value=0, max_value=100, value=60)
+    days_threshold = st.number_input("Enter Minimum Age", min_value=0, max_value=100, value=30)
+
+    if 'combined_file_path' not in st.session_state:
+        st.session_state.combined_file_path = None
+    if 'transfer_file_path' not in st.session_state:
+        st.session_state.transfer_file_path = None
+
+    if uploaded_warehouse_file and uploaded_shop_file:
+        if st.button('Start Processing'):
+            with st.spinner('Processing data...'):
+                warehouse_df = pd.read_excel(uploaded_warehouse_file)
+                shop_df = pd.read_excel(uploaded_shop_file)
+
+                # Adjust dates
+                shop_df = adjust_date(shop_df, threshold_date)
+
+                # Process and combine data
+                warehouse_subset = warehouse_df[['UPC/SKU/Barcode', 'STORE_NAME', 'O.H QTY']]
+                combined_df = pd.concat([shop_df, warehouse_subset], ignore_index=True)
+                combined_df['Adjusted 1st Rcv Date'] = pd.to_datetime(combined_df['Adjusted 1st Rcv Date'], errors='coerce')
+                shop_data = combined_df[combined_df['STORE_NAME'] != 'Warehouse']
+                highest_dates = shop_data.groupby('UPC/SKU/Barcode')['Adjusted 1st Rcv Date'].max()
+                default_date = pd.to_datetime('2024-02-17')
+                combined_df.loc[
+                    (combined_df['STORE_NAME'] == 'Warehouse') & (combined_df['Adjusted 1st Rcv Date'].isna()), 
+                    'Adjusted 1st Rcv Date'
+                ] = combined_df.loc[
+                    (combined_df['STORE_NAME'] == 'Warehouse'), 
+                    'UPC/SKU/Barcode'
+                ].map(highest_dates).fillna(default_date)
+                
+                combined_df = calculate_sell_through(combined_df)
+                combined_df = calculate_days(combined_df)
+                design_sell_through = calculate_design_sell_through(combined_df)
+                combined_df = pd.merge(combined_df, design_sell_through[['UPC/SKU/Barcode', 'design Sell Through']], on='UPC/SKU/Barcode', how='left')
+                combined_df = apply_status_condition(combined_df)
+                article_days = calculate_article_days(combined_df)
+                targeted_cover_df = process_and_calculate_cover(combined_df, article_days)
+                combined_df = pd.merge(combined_df, targeted_cover_df, on='UPC/SKU/Barcode', how='left')
+                combined_df = calculate_required_cover(combined_df)
+                transfer_df = create_transfer_records(combined_df)
+
+                # Save files to temporary files
+                st.session_state.combined_file_path = tempfile.mktemp(suffix=".xlsx")
+                st.session_state.transfer_file_path = tempfile.mktemp(suffix=".xlsx")
+
+                combined_df.drop(columns=['Net Receiving', '1st Rcv Date']).to_excel(st.session_state.combined_file_path, index=False)
+                transfer_df.to_excel(st.session_state.transfer_file_path, index=False)
+
+                st.success("Processing complete. You can now download the files.")
+
+    if st.session_state.combined_file_path and st.session_state.transfer_file_path:
+        with open(st.session_state.combined_file_path, "rb") as combined_file:
+            st.download_button(
+                label="Download Combined Data",
+                data=combined_file.read(),
+                file_name="combined_data.xlsx"
+            )
+        with open(st.session_state.transfer_file_path, "rb") as transfer_file:
+            st.download_button(
+                label="Download Transfer Details",
+                data=transfer_file.read(),
+                file_name="TRANSFER_data.xlsx"
+            )
 
 if __name__ == "__main__":
     show_assortment()
