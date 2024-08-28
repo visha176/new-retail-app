@@ -110,6 +110,41 @@ def create_transfer_records(df):
     transfer_df = pd.DataFrame(transfer_records)
     
     return transfer_df
+def create_sample_files():
+    # Sample data for the shop file
+    shop_data = {
+    'UPC/SKU/Barcode': ['12345', '67890'],
+    'STORE_NAME': ['Shop1', 'Shop2'],
+    'Shop Rcv Qty': [100, 150],
+    'Disp. Qty': [10, 20],
+    'O.H QTY': [50, 20],
+    'Sold Qty': [20, 5],
+    '1st Rcv Date': ['2024-01-01', '2024-02-01'],
+    'Color':['Red','Blue'],
+    'Size':['Small','Medium'],
+    'Class':['Casual','Fancy'],
+    'SubClass':['Lawn','Chiffon']
+    }
+
+    # Sample data for the warehouse file
+    warehouse_data = {
+        'UPC/SKU/Barcode': ['12345', '67890'],
+        'STORE_NAME': ['Warehouse','Warehouse'],
+        'O.H QTY': [100, 150]
+    }
+
+    # Create dataframes
+    shop_df = pd.DataFrame(shop_data)
+    warehouse_df = pd.DataFrame(warehouse_data)
+
+    # Save the sample files to temporary paths
+    shop_sample_file = tempfile.mktemp(suffix=".xlsx")
+    warehouse_sample_file = tempfile.mktemp(suffix=".xlsx")
+
+    shop_df.to_excel(shop_sample_file, index=False)
+    warehouse_df.to_excel(warehouse_sample_file, index=False)
+
+    return shop_sample_file, warehouse_sample_file
 
 def show_assortment():
     st.markdown("""
@@ -167,7 +202,22 @@ def show_assortment():
         </style>
     """, unsafe_allow_html=True)
     st.title('Assortment✍')
+     # Sample files download section
+    shop_sample_file, warehouse_sample_file = create_sample_files()
 
+    st.markdown("### Download Sample Files")
+    with open(shop_sample_file, "rb") as shop_file:
+        st.download_button(
+            label="Download Sample Shop File",
+            data=shop_file.read(),
+            file_name="sample_shop_file.xlsx"
+        )
+    with open(warehouse_sample_file, "rb") as warehouse_file:
+        st.download_button(
+            label="Download Sample Warehouse File",
+            data=warehouse_file.read(),
+            file_name="sample_warehouse_file.xlsx"
+        )
     uploaded_warehouse_file = st.file_uploader("Upload Warehouse File", type=["xlsx"])
     uploaded_shop_file = st.file_uploader("Upload Shop File", type=["xlsx"])
 
