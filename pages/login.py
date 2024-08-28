@@ -1,7 +1,7 @@
 import streamlit as st
 
 # Dummy user credentials
-USER_CREDENTIALS = {'ptr@gmail.com': '12345'}
+USER_CREDENTIALS = {'ptr@testuser': '12345'}
 
 def login_page():
     st.title("Login")
