@@ -14,7 +14,7 @@ import pages.login as login  # Import the updated login module
 all_pages = {
     "Home 🏠": home.show_home,
     "Contact 📞": contact.show_contact,
-    "Assortment 🛒": assortment.show_assortment,
+    "Replenishment 🛒": assortment.show_assortment,
     "Internal Store Transfer📦": {
         "Network 🌐": network.show_Network,
         "City 🏙️": city.show_city,
