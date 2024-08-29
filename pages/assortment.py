@@ -201,7 +201,7 @@ def show_assortment():
                 
         </style>
     """, unsafe_allow_html=True)
-    st.title('Assortment✍')
+    st.title('Replenishment✍')
      # Sample files download section
     shop_sample_file, warehouse_sample_file = create_sample_files()
 
