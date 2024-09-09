@@ -1,7 +1,12 @@
 import streamlit as st
 
-# Dummy user credentials
-USER_CREDENTIALS = {'ptr@testuser': '12345'}
+# Dummy user credentials for multiple users
+USER_CREDENTIALS = {
+    'admin@gmail.com': '12345',
+    'Walkeaze@gmail.com': 'Walkeaze1234',
+    'Urban sole@gmail.com': 'Urbansole1234',
+    'HP@gmail.com': 'HP1234',
+}
 
 def login_page():
     st.title("Login")
