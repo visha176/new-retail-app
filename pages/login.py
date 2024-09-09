@@ -2,6 +2,7 @@ import streamlit as st
 
 # Dummy user credentials for multiple users
 USER_CREDENTIALS = {
+    'ptr@testuser': '12345',
     'admin@rpt.com': '12345',
     'Walkeaze@rpt.com': 'Walkeaze1234',
     'Urban_sole@rpt.com': 'Urbansole1234',
