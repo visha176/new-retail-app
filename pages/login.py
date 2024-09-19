@@ -3,9 +3,9 @@ import streamlit as st
 # Dummy user credentials for multiple users
 USER_CREDENTIALS = {
     'admin@rpt.com': '12345',
-    'Walkeaze@rpt.com': 'Walkeaze1234',
-    'Urban_sole@rpt.com': 'Urbansole1234',
-    'HP@rpt.com': 'HP1234',
+    'Walkeaze@rpt.com': 'Walkeaze978',
+    'Urban_sole@rpt.com': 'Urbansole978',
+    'HP@rpt.com': 'HP978',
 }
 
 def login_page():
