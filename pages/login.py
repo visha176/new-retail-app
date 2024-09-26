@@ -6,6 +6,7 @@ USER_CREDENTIALS = {
     'Walkeaze@rpt.com': 'Walkeaze978',
     'Urban_sole@rpt.com': 'Urbansole1234',
     'HP@rpt.com': 'HP978',
+    'DynastyApparel@rpt.com': 'Dynasty1234',
 }
 
 def login_page():
