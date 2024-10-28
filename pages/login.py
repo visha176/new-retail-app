@@ -7,7 +7,7 @@ USER_CREDENTIALS = {
     'Urban_sole@rpt.com': '4',
     'HP@rpt.com': '8',
     'Bata@rpt.com': 'n',
-    'OutFitter@rpt.com': 'OutFitter978',
+    'OutFitter@rpt.com': 'n',
     'DynastyApparel@rpt.com': '4',
     'Orient@rpt.com': 'orient@_321'
     
