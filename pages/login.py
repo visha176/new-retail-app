@@ -9,7 +9,7 @@ USER_CREDENTIALS = {
     'Bata@rpt.com': 'n',
     'OutFitter@rpt.com': 'OutFitter978',
     'DynastyApparel@rpt.com': '4',
-    'Orient@rpt.com': 'orient@_321',
+    'Orient@rpt.com': 'orient@_321'
     
 }
 
