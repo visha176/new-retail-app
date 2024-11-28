@@ -4,7 +4,7 @@ import streamlit as st
 USER_CREDENTIALS = {
     'admin@rpt.com': 'new@_123',
     'Walkeaze@rpt.com': 'Walkeaze@_123',
-    'Urban_sole@rpt.com': '4',
+    'Urban_sole@rpt.com': 'urban@_123',
     'HP@rpt.com': '8',
     'Bata@rpt.com': 'n',
     'OutFitter@rpt.com': 'n',
